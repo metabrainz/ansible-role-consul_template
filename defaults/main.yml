@@ -1,0 +1,85 @@
+---
+consul_template_base_directory: /opt/consul-template
+consul_template_release_directory: "{{ consul_template_base_directory }}/releases"
+consul_template_release_path: "{{ consul_template_release_directory }}/consul-template-{{ consul_template_version }}"
+consul_template_binary_path: /usr/local/bin/consul-template
+
+consul_template_version: "0.31.0"
+consul_template_os: linux
+consul_template_architecture: amd64
+
+consul_template_download_file: "consul-template_{{ consul_template_version }}\
+  _{{ consul_template_os }}_{{ consul_template_architecture }}.zip"
+consul_template_download_url: "https://releases.hashicorp.com/consul-template/{{ consul_template_version }}/\
+  {{ consul_template_download_file }}"
+#consul_template_download_checksum: "sha1:XXXX"
+
+#consul_template_user:
+#consul_template_group:
+
+consul_template_service_enabled: true
+consul_template_service_state: started
+consul_template_reload_handler_state: reloaded
+consul_template_restart_handler_state: restarted
+
+consul_template_configuration: {}
+consul_template_group_configuration: {}
+consul_template_host_configuration: {}
+
+consul_template_templates: {}
+consul_template_group_templates: {}
+consul_template_host_templates: {}
+
+consul_template_manage_user: false
+#consul_template_user_group:
+#consul_template_user_groups:
+#consul_template_user_append:
+#consul_template_user_home:
+#consul_template_user_create_home:
+#consul_template_user_shell:
+#consul_template_user_system:
+
+consul_template_configuration_directory: /etc/consul-template
+#consul_template_configuration_directory_owner:
+#consul_template_configuration_directory_group:
+consul_template_configuration_directory_mode: "0755"
+consul_template_configuration_file: "{{ consul_template_configuration_directory }}/config.json"
+#consul_template_configuration_file_owner:
+#consul_template_configuration_file_group:
+consul_template_configuration_file_mode: "0644"
+
+consul_template_templates_directory: "{{ consul_template_configuration_directory }}/templates"
+#consul_template_templates_directory_owner:
+#consul_template_templates_directory_group:
+consul_template_templates_directory_mode: "0755"
+
+consul_template_service_configuration:
+  Unit:
+    Description: "HashiCorp Consul Template"
+    Documentation: https://www.consul.io/
+    Requires: network-online.target
+    After: network-online.target consul.service consul-agent.service
+    ConditionFileNotEmpty: "{{ consul_template_configuration_file }}"
+  Service:
+    User: "{{ consul_template_user | d() }}"
+    Group: "{{ consul_template_group | d() }}"
+    ExecStart: "{{ consul_template_binary_path }} -config={{ consul_template_configuration_file }}"
+    ExecReload: /bin/kill --signal HUP $MAINPID
+    KillMode: process
+    KillSignal: SIGINT
+    Restart: on-failure
+    PrivateDevices: true
+    ProtectControlGroups: true
+    ProtectKernelTunables: true
+    ProtectSystem: strict
+    ReadWritePaths: "{{ consul_template_templates_directory }}"
+  Install:
+    WantedBy: multi-user.target
+consul_template_group_service_configuration: {}
+consul_template_host_service_configuration: {}
+
+# https://docs.ansible.com/ansible/latest/collections/ansible/builtin/combine_filter.html#keyword-parameters
+consul_template_configuration_list_merge: replace
+consul_template_configuration_recursive_merge: true
+consul_template_service_configuration_list_merge: replace
+consul_template_service_configuration_recursive_merge: true

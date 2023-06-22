@@ -1,0 +1,22 @@
+---
+- name: Prepare
+  hosts: all
+  tasks:
+    - name: Install dependencies
+      ansible.builtin.apt:
+        name:
+          # for unpacking consul-template archive
+          - unzip
+          # for community.general.consul_kv module
+          - python3-consul
+        update_cache: true
+        cache_valid_time: 900
+
+    - name: Install Consul client in dev mode
+      ansible.builtin.include_role:
+        name: metabrainz.consul
+      vars:
+        consul_client: true
+        consul_client_group_service_configuration:
+          Service:
+            ExecStart: "{{ consul_binary_path }} agent -dev"

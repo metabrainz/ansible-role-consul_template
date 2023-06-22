@@ -1,0 +1,5 @@
+consul_template_base_directory: /opt/consul-template
+consul_template_release_directory: "{{ consul_template_base_directory }}/releases"
+consul_template_release_path: "{{ consul_template_release_directory }}/consul-template-{{ consul_template_version }}"
+consul_template_binary_path: /usr/local/bin/consul-template
+consul_template_version: "0.31.0"

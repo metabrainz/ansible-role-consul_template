@@ -1,0 +1,45 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Ensure Consul Template is installed
+      ansible.builtin.stat:
+        path: "{{ consul_template_release_path }}"
+        get_attributes: false
+        get_checksum: false
+        get_mime: false
+      register: result
+      changed_when: false
+      failed_when: result.stat.isreg is not defined or not result.stat.isreg
+
+    - name: Ensure Consul Template symlink is installed
+      ansible.builtin.stat:
+        path: "{{ consul_template_binary_path }}"
+      register: result
+      changed_when: false
+      failed_when: result.stat.islnk is not defined or not result.stat.islnk
+
+    - name: Reload consul-template
+      ansible.builtin.service:
+        name: consul-template
+        state: reloaded
+
+    - name: Write molecule test key to Consul
+      community.general.consul_kv:
+        key: molecule
+        value: "{{ test_value }}"
+
+    - name: Wait for 1 second for Consul Template to write out template
+      ansible.builtin.pause:
+        seconds: 1
+
+    - name: Ensure templated file content is correct
+      ansible.builtin.copy:
+        dest: "/etc/consul-template/templates/molecule.conf"
+        content: |
+          {{ test_value }}
+        mode: "0644"
+      check_mode: true
+      register: result
+      failed_when: result is changed

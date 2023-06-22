@@ -1,0 +1,11 @@
+consul_template_group_configuration:
+  template:
+    - source: "{{ consul_template_templates_directory }}/molecule.conf.ctmpl"
+      destination: "{{ consul_template_templates_directory }}/molecule.conf"
+      perms: "0644"
+
+consul_template_group_templates:
+  molecule.conf:
+    content: !unsafe '{{ key "molecule" }}'
+
+test_value: edit2Fisher3taurus

@@ -1,0 +1,21 @@
+---
+- name: Reload SystemD
+  listen: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Reload Consul Template
+  listen: reload consul template
+  ansible.builtin.service:
+    name: consul-template
+    state: "{{ consul_template_reload_handler_state }}"
+  when: consul_template_service_enabled | bool
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Restart Consul Template
+  listen: restart consul template
+  ansible.builtin.service:
+    name: consul-template
+    state: "{{ consul_template_restart_handler_state }}"
+  when: consul_template_service_enabled | bool
+  ignore_errors: "{{ ansible_check_mode }}"

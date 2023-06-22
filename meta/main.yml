@@ -1,0 +1,12 @@
+galaxy_info:
+  role_name: borg
+  namespace: metabrainz
+  company: MetaBrainz Foundation
+  author: Adam James (atj)
+  description: Installs borg in a Python virtualenv
+  license: CC0
+  min_ansible_version: "2.4"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal

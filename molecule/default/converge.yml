@@ -1,0 +1,8 @@
+---
+- name: Converge
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: "Include metabrainz.consul_template"
+      ansible.builtin.include_role:
+        name: "metabrainz.consul_template"

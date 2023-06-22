@@ -1,0 +1,178 @@
+---
+- name: Create Consul Template releases directory
+  ansible.builtin.file:
+    path: "{{ consul_template_release_directory }}"
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+
+- name: Stat Consul Template binary path
+  ansible.builtin.stat:
+    path: "{{ consul_template_binary_path }}"
+    get_attributes: false
+    get_checksum: false
+    get_mime: false
+  register: _consul_template_binary
+
+- name: Fail if Consul Template binary path exists and is not a symlink
+  ansible.builtin.fail:
+    msg: "{{ consul_template_binary_path }} exists and is not a symlink, aborting"
+  when:
+    - _consul_template_binary.stat.islnk is defined
+    - not _consul_template_binary.stat.islnk
+
+- name: Get current version of Consul Template
+  when: _consul_template_binary.stat.islnk | d()
+  block:
+    - name: Query installed Consul Template version
+      ansible.builtin.command: "{{ consul_template_binary_path }} -version"
+      register: _consul_template_version_output
+      changed_when: false
+
+    - name: Extract installed Consul Template version
+      ansible.builtin.set_fact:
+        _consul_template_installed_version: >-
+          {{ _consul_template_version_output.stdout | regex_search('\d+\.\d+\.\d+') }}
+      failed_when: _consul_template_installed_version == ""
+
+- name: Download and install Consul Template
+  when: consul_template_version != (_consul_template_installed_version | d())
+  block:
+    - name: Create temporary download directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: consul_template
+      register: _consul_template_tempdir
+
+    - name: Download Consul Template release
+      ansible.builtin.get_url:
+        url: "{{ consul_template_download_url }}"
+        checksum: "{{ consul_template_download_checksum | d(omit) }}"
+        dest: "{{ _consul_template_tempdir.path }}/{{ consul_template_download_file }}"
+        mode: "0644"
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Extract Consul Template binary from archive
+      ansible.builtin.unarchive:
+        src: "{{ _consul_template_tempdir.path }}/{{ consul_template_download_file }}"
+        dest: "{{ _consul_template_tempdir.path }}"
+        copy: false
+        mode: "0755"
+        owner: root
+        group: root
+        include:
+          - consul-template
+
+    - name: Copy Consul Template binary to release directory
+      ansible.builtin.copy:
+        src: "{{ _consul_template_tempdir.path }}/consul-template"
+        dest: "{{ consul_template_release_path }}"
+        mode: "0755"
+        remote_src: true
+  always:
+    - name: Delete temporary download directory
+      ansible.builtin.file:
+        path: "{{ _consul_template_tempdir.path }}"
+        state: absent
+      when: _consul_template_tempdir is defined
+
+- name: Install Consul Template symlink
+  ansible.builtin.file:
+    path: "{{ consul_template_binary_path }}"
+    src: "{{ consul_template_release_path }}"
+    state: link
+    force: true
+
+- name: Create Consul Template user account
+  ansible.builtin.user:
+    name: "{{ consul_template_user }}"
+    group: "{{ consul_template_user_group | d(omit) }}"
+    groups: "{{ consul_template_user_groups | d(omit) }}"
+    append: "{{ consul_template_user_append | d(omit) }}"
+    shell: "{{ consul_template_user_shell | d(omit) }}"
+    home: "{{ consul_template_user_home | d(omit) }}"
+    create_home: "{{ consul_template_user_create_home | d(omit) }}"
+    system: "{{ consul_template_user_system | d(omit) }}"
+  when: (consul_template_manage_user | bool) and consul_template_user is defined
+
+- name: Create Consul Template configuration directory
+  ansible.builtin.file:
+    path: "{{ consul_template_configuration_directory }}"
+    owner: "{{ consul_template_configuration_directory_owner | d(omit) }}"
+    group: "{{ consul_template_configuration_directory_group | d(omit) }}"
+    mode: "{{ consul_template_configuration_directory_mode }}"
+    state: directory
+  
+- name: Create Consul Template templates directory
+  ansible.builtin.file:
+    path: "{{ consul_template_templates_directory }}"
+    owner: "{{ consul_template_templates_directory_owner | d(omit) }}"
+    group: "{{ consul_template_templates_directory_group | d(omit) }}"
+    mode: "{{ consul_template_templates_directory_mode }}"
+    state: directory
+    
+- name: Install Consul Template configuration
+  ansible.builtin.template:
+    src: etc/consul-template/config.json.j2
+    dest: "{{ consul_template_configuration_file }}"
+    owner: "{{ consul_template_configuration_file_owner | d(omit) }}"
+    group: "{{ consul_template_configuration_file_group | d(omit) }}"
+    mode: "{{ consul_template_configuration_file_mode }}"
+  notify: reload consul template
+  vars:
+    _consul_template_configuration: >-
+      {{
+        consul_template_configuration | combine(
+          consul_template_group_configuration,
+          consul_template_host_configuration,
+          list_merge=consul_template_configuration_list_merge,
+          recursive=consul_template_configuration_recursive_merge
+        )
+      }}
+
+- name: Install Consul Template templates
+  ansible.builtin.template:
+    src: "etc/consul-template/templates/template.ctmpl.j2"
+    dest: "{{ consul_template_templates_directory }}/{{ item.key }}.ctmpl"
+    owner: "{{ item.owner | d(omit) }}"
+    group: "{{ item.group | d(omit) }}"
+    mode: "{{ item.mode | d('0644') }}"
+    backup: "{{ item.backup | d(omit) }}"
+  loop: "{{ _consul_template_templates | dict2items }}"
+  notify: reload consul template
+  vars:
+    _consul_template_templates: >-
+      {{
+        consul_template_templates | combine(
+          consul_template_group_templates,
+          consul_template_host_templates,
+          recursive=consul_template_configuration_recursive_merge
+        )
+      }}
+
+- name: Install Consul Template SystemD service
+  ansible.builtin.template:
+    src: systemd.service.j2
+    dest: "/etc/systemd/system/consul-template.service"
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart consul template
+  vars:
+    service_config: >-
+      {{
+        consul_template_service_configuration | combine(
+          consul_template_group_service_configuration,
+          consul_template_host_service_configuration,
+          list_merge=consul_template_service_configuration_list_merge,
+          recursive=consul_template_service_configuration_recursive_merge
+        )
+      }}
+
+- name: Enable and start Consul client service
+  ansible.builtin.service:
+    name: consul-template
+    state: "{{ consul_template_service_state }}"
+    enabled: "{{ consul_template_service_enabled }}"
+  ignore_errors: "{{ ansible_check_mode }}"
